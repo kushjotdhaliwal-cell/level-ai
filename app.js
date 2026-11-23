@@ -1,5 +1,5 @@
 const chat=document.querySelector('#chat'),form=document.querySelector('#form'),input=document.querySelector('#prompt'),statusEl=document.querySelector('#status'),countEl=document.querySelector('#count'),imageCount=document.querySelector('#imageCount');
-let messages=[],remaining=20,images=5;const API_BASE='https://level-ai2dpc.onrender.com'; Set to your deployed backend URL, e.g. https://your-service.example.com
+let messages=[],remaining=20,images=5;const API_BASE='https://level-ai2dpc.onrender.com'; Set to your deployed backend URL const API_BASE='https://level-ai2dpc.onrender.com';
 function bubble(role,text){const el=document.createElement('div');el.className='msg '+role;el.textContent=text;chat.appendChild(el);chat.scrollTop=chat.scrollHeight;return el}
 function update(){countEl.textContent=remaining+' messages left';imageCount.textContent=images+' left today'}
 form.addEventListener('submit',async e=>{e.preventDefault();const text=input.value.trim();if(!text)return;if(remaining<=0){bubble('assistant','You used the 20 messages in this chat. Clear the chat to start a new one.');return}
