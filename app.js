@@ -4,9 +4,7 @@ const input = document.querySelector('#prompt');
 const statusEl = document.querySelector('#status');
 const countEl = document.querySelector('#count');
 const imageCount = document.querySelector('#imageCount');
-
-const API_BASE = 'https://level-ai2dpc.onrender.com';
-
+const API_BASE='https://level-ai-2dpc.onrender.com';
 let messages = [];
 let remaining = 20;
 let images = 5;
