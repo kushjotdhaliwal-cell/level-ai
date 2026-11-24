@@ -16,53 +16,95 @@ app.use(cors({
 app.use(express.json({ limit: '2mb' }));
 
 const apiKey = process.env.GEMINI_API_KEY;
-const ai = apiKey ? new GoogleGenAI({ apiKey }) : null;
-const chatModel = process.env.GEMINI_CHAT_MODEL || 'gemini-2.5-flash';
 
-app.get('/health', (_req, res) => {
-  res.json({ ok: true, service: 'LEVEL AI' });
+const ai = apiKey
+  ? new GoogleGenAI({ apiKey })
+  : null;
+
+const chatModel =
+  process.env.GEMINI_CHAT_MODEL || 'gemini-2.5-flash';
+
+// HEALTH CHECK
+app.get('/health', (req, res) => {
+  res.json({
+    ok: true,
+    service: 'LEVEL AI',
+    aiConfigured: Boolean(ai),
+    model: chatModel
+  });
 });
 
+// CHAT
 app.post('/api/chat', async (req, res) => {
+  console.log('New chat request received');
+
   try {
     if (!ai) {
-      return res.status(503).json({ error: 'Missing GEMINI_API_KEY' });
+      console.error('GEMINI_API_KEY is missing');
+
+      return res.status(503).json({
+        error: 'Gemini API key is missing'
+      });
     }
 
     const messages = Array.isArray(req.body.messages)
       ? req.body.messages
       : [];
 
-    const contents = messages.slice(-40).map(m => ({
-      role: m.role === 'assistant' ? 'model' : 'user',
-      parts: [{ text: String(m.content || '').slice(0, 12000) }]
+    if (messages.length === 0) {
+      return res.status(400).json({
+        error: 'No messages provided'
+      });
+    }
+
+    const contents = messages.slice(-40).map(message => ({
+      role: message.role === 'assistant' ? 'model' : 'user',
+      parts: [{
+        text: String(message.content || '').slice(0, 12000)
+      }]
     }));
 
-    if (!contents.length) {
-      return res.status(400).json({ error: 'No messages provided' });
-    }
+    console.log('Sending request to Gemini...');
+    console.log('Model:', chatModel);
 
     const response = await ai.models.generateContent({
       model: chatModel,
       contents
     });
 
-    res.json({ text: response.text || '' });
+    const answer = response.text || '';
 
-  } catch (err) {
-    console.error('Chat error:', err);
-    res.status(500).json({ error: 'AI request failed. Check Render logs.' });
+    console.log('Gemini responded successfully');
+
+    return res.json({
+      text: answer
+    });
+
+  } catch (error) {
+    console.error('========== GEMINI ERROR ==========');
+    console.error('Message:', error.message);
+    console.error('Status:', error.status || error.statusCode || 'Unknown');
+    console.error('==================================');
+
+    return res.status(500).json({
+      error: 'Gemini request failed',
+      details: String(error.message || 'Unknown error').slice(0, 1000)
+    });
   }
 });
 
-app.post('/api/image', (_req, res) => {
+// IMAGE GENERATION
+app.post('/api/image', (req, res) => {
   res.status(501).json({
-    error: 'Image generation is not configured yet.'
+    error: 'Image generation is not configured yet'
   });
 });
 
-const port = Number(process.env.PORT || 3000);
+// START SERVER
+const PORT = Number(process.env.PORT || 3000);
 
-app.listen(port, () => {
-  console.log(`LEVEL AI backend listening on ${port}`);
+app.listen(PORT, () => {
+  console.log(`LEVEL AI backend listening on ${PORT}`);
+  console.log(`Gemini configured: ${Boolean(ai)}`);
+  console.log(`Gemini model: ${chatModel}`);
 });
