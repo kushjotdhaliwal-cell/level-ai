@@ -6,9 +6,7 @@ import { GoogleGenAI } from '@google/genai';
 const app = express();
 
 app.use(cors({
-  origin: [
-    'https://kushjotdhaliwal-cell.github.io'
-  ],
+  origin: ['https://kushjotdhaliwal-cell.github.io'],
   methods: ['GET', 'POST', 'OPTIONS'],
   allowedHeaders: ['Content-Type']
 }));
@@ -16,15 +14,14 @@ app.use(cors({
 app.use(express.json({ limit: '2mb' }));
 
 const apiKey = process.env.GEMINI_API_KEY;
-
-const ai = apiKey
-  ? new GoogleGenAI({ apiKey })
-  : null;
+const ai = apiKey ? new GoogleGenAI({ apiKey }) : null;
 
 const chatModel =
-  process.env.GEMINI_CHAT_MODEL || 'gemini-2.5-flash';
+  process.env.GEMINI_CHAT_MODEL || 'gemini-3.8-flash';
 
-// HEALTH CHECK
+const sleep = ms =>
+  new Promise(resolve => setTimeout(resolve, ms));
+
 app.get('/health', (req, res) => {
   res.json({
     ok: true,
@@ -34,14 +31,9 @@ app.get('/health', (req, res) => {
   });
 });
 
-// CHAT
 app.post('/api/chat', async (req, res) => {
-  console.log('New chat request received');
-
   try {
     if (!ai) {
-      console.error('GEMINI_API_KEY is missing');
-
       return res.status(503).json({
         error: 'Gemini API key is missing'
       });
@@ -51,7 +43,7 @@ app.post('/api/chat', async (req, res) => {
       ? req.body.messages
       : [];
 
-    if (messages.length === 0) {
+    if (!messages.length) {
       return res.status(400).json({
         error: 'No messages provided'
       });
@@ -64,43 +56,60 @@ app.post('/api/chat', async (req, res) => {
       }]
     }));
 
-    console.log('Sending request to Gemini...');
-    console.log('Model:', chatModel);
+    for (let attempt = 1; attempt <= 4; attempt++) {
+      try {
+        console.log(`Gemini attempt ${attempt}/4`);
 
-    const response = await ai.models.generateContent({
-      model: chatModel,
-      contents
-    });
+        const response = await ai.models.generateContent({
+          model: chatModel,
+          contents
+        });
 
-    const answer = response.text || '';
+        return res.json({
+          text: response.text || ''
+        });
 
-    console.log('Gemini responded successfully');
+      } catch (error) {
+        const status = Number(
+          error.status || error.statusCode || 0
+        );
 
-    return res.json({
-      text: answer
-    });
+        console.error('Gemini error:', status, error.message);
+
+        const retryable = [429, 500, 502, 503, 504].includes(status);
+
+        if (!retryable || attempt === 4) {
+          if (status === 503 || status === 429) {
+            return res.status(status).json({
+              error: 'Google AI is very busy. Please try again in a minute.'
+            });
+          }
+
+          return res.status(500).json({
+            error: 'Gemini error: ' +
+              String(error.message || 'Unknown error').slice(0, 500)
+          });
+        }
+
+        await sleep(1500 * Math.pow(2, attempt - 1));
+      }
+    }
 
   } catch (error) {
-    console.error('========== GEMINI ERROR ==========');
-    console.error('Message:', error.message);
-    console.error('Status:', error.status || error.statusCode || 'Unknown');
-    console.error('==================================');
+    console.error('Server error:', error);
 
     return res.status(500).json({
-      error: 'Gemini request failed',
-      details: String(error.message || 'Unknown error').slice(0, 1000)
+      error: 'LEVEL AI backend error'
     });
   }
 });
 
-// IMAGE GENERATION
 app.post('/api/image', (req, res) => {
   res.status(501).json({
     error: 'Image generation is not configured yet'
   });
 });
 
-// START SERVER
 const PORT = Number(process.env.PORT || 3000);
 
 app.listen(PORT, () => {
@@ -108,3 +117,4 @@ app.listen(PORT, () => {
   console.log(`Gemini configured: ${Boolean(ai)}`);
   console.log(`Gemini model: ${chatModel}`);
 });
+
